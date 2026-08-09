@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { OUTPUT_COLUMNS, type TransformationResult } from "../lib/rate-transformer";
+import rateWorkerUrl from "./rate-worker.ts?worker&url";
 
 type Status = "idle" | "processing" | "success" | "error";
 const PAGE_SIZE = 75;
@@ -61,7 +62,7 @@ export default function Home() {
 
     try {
       const buffer = await selected.arrayBuffer();
-      const worker = new Worker(new URL("./rate-worker.ts", import.meta.url), { type: "module" });
+      const worker = new Worker(rateWorkerUrl, { type: "module" });
       workerRef.current?.terminate();
       workerRef.current = worker;
       worker.onmessage = ({ data }) => {
@@ -75,8 +76,11 @@ export default function Home() {
         worker.terminate();
         workerRef.current = null;
       };
-      worker.onerror = () => {
-        setError("The workbook could not be processed. Check that it is a valid .xlsx file and try again.");
+      worker.onerror = (event) => {
+        const detail = event.message && event.message !== "Script error."
+          ? ` Processor error: ${event.message}`
+          : "";
+        setError(`The Excel processor could not start.${detail} Please try the file again.`);
         setStatus("error");
         worker.terminate();
         workerRef.current = null;
