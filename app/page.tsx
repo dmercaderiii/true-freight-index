@@ -19,6 +19,12 @@ function formatFileSize(bytes: number) {
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 }
 
+function buildCsvFilename(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `CEA-NAE_NAW Rate Analysis Report ${month}${day}${date.getFullYear()}.csv`;
+}
+
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -113,12 +119,12 @@ export default function Home() {
   }
 
   function downloadCsv() {
-    if (!result || !file) return;
+    if (!result) return;
     const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = file.name.replace(/\.xlsx$/i, "") + " - normalized.csv";
+    anchor.download = buildCsvFilename();
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -202,7 +208,7 @@ export default function Home() {
       {status === "success" && result && (
         <section className="results-section">
           <div className="results-header">
-            <div><span className="step-number">02</span><h2>Review normalized data</h2><p>Showing all 12 output fields. The downloaded CSV has no header row.</p></div>
+            <div><span className="step-number">02</span><h2>Review Data</h2><p>Showing all 12 output fields. The downloaded CSV has no header row.</p></div>
             <div className="result-actions">
               <button className="secondary-button" type="button" onClick={reset}><RefreshCcw size={17} /> Upload another</button>
               <button className="download-button" type="button" onClick={downloadCsv}><Download size={18} /> Download CSV</button>
