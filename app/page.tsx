@@ -157,7 +157,7 @@ export default function Home() {
 
       <section className="workspace" aria-live="polite">
         <div className="section-heading">
-          <div><span className="step-number">01</span><h2>Upload rate workbook</h2></div>
+          <div><span className="step-number">01</span><h2>Upload Excel File</h2></div>
         </div>
 
         {status === "idle" && (
@@ -170,7 +170,7 @@ export default function Home() {
             <div className="upload-icon"><UploadCloud size={30} /></div>
             <h3>Drop your Excel file here</h3>
             <p>or select it from your computer</p>
-            <button className="primary-button" type="button" onClick={() => inputRef.current?.click()}>Choose workbook</button>
+            <button className="primary-button" type="button" onClick={() => inputRef.current?.click()}>Choose Excel File</button>
             <span className="file-hint">XLSX · processed privately on this device</span>
           </div>
         )}
