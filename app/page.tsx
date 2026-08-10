@@ -158,7 +158,6 @@ export default function Home() {
       <section className="workspace" aria-live="polite">
         <div className="section-heading">
           <div><span className="step-number">01</span><h2>Upload rate workbook</h2></div>
-          <p>Required columns A–L · First worksheet · .xlsx only</p>
         </div>
 
         {status === "idle" && (
