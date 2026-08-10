@@ -171,7 +171,6 @@ export default function Home() {
             <h3>Drop your Excel file here</h3>
             <p>or select it from your computer</p>
             <button className="primary-button" type="button" onClick={() => inputRef.current?.click()}>Choose Excel File</button>
-            <span className="file-hint">XLSX · processed privately on this device</span>
           </div>
         )}
 
