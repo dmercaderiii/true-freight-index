@@ -8,7 +8,10 @@ const DATABASE_COLUMNS = [
 const INSERT_BATCH_SIZE = 500;
 
 export async function POST(request: Request) {
-  if (!request.headers.get("oai-authenticated-user-id")) {
+  const hasSitesIdentity = Boolean(request.headers.get("oai-authenticated-user-id"));
+  const hasCloudflareAccessIdentity = Boolean(request.headers.get("cf-access-jwt-assertion"));
+
+  if (!hasSitesIdentity && !hasCloudflareAccessIdentity) {
     return Response.json({ message: "You must be signed in to upload rates." }, { status: 401 });
   }
 
