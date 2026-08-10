@@ -287,13 +287,6 @@ export default function Home() {
         </div>
       )}
 
-      <section className="process-strip">
-        <div><span>01</span><strong>Validate</strong><p>Checks all 12 source columns.</p></div>
-        <div><span>02</span><strong>Expand</strong><p>Splits every location combination.</p></div>
-        <div><span>03</span><strong>Normalize</strong><p>Unpivots rates and maps trades.</p></div>
-        <div><span>04</span><strong>Export</strong><p>Produces an escaped, headerless CSV.</p></div>
-      </section>
-      <footer><span>RateFlow · Internal rate operations</span><span>Excel never leaves your device</span></footer>
     </main>
   );
 }
