@@ -147,7 +147,7 @@ export default function Home() {
   }
 
   return (
-    <main>
+    <main id="top">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="RateFlow home">
           <span className="brand-mark"><FileSpreadsheet size={20} strokeWidth={2.2} /></span>
@@ -155,12 +155,6 @@ export default function Home() {
         </a>
         <div className="privacy-note"><ShieldCheck size={16} /> Files stay in your browser</div>
       </header>
-
-      <section className="hero" id="top">
-        <div className="eyebrow">Rate normalization workspace</div>
-        <h1>Excel rates in.<br /><span>Clean CSV out.</span></h1>
-        <p>Convert carrier rate workbooks into a consistent 12-column CSV—split locations, normalized containers, and correctly placed coast rates included.</p>
-      </section>
 
       <section className="workspace" aria-live="polite">
         <div className="section-heading">
