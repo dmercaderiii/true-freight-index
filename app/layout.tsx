@@ -10,17 +10,17 @@ export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const imageUrl = `${protocol}://${host}/og.png`;
+  const imageUrl = `${protocol}://${host}/tfx-logo-horizontal.png`;
   return {
-    title: "RateFlow | Excel Rate Normalizer",
+    title: "TrueFreight Index | Excel Rate Normalizer",
     description: "Convert logistics rate workbooks into clean, normalized CSV files.",
     openGraph: {
-      title: "RateFlow | Excel Rate Normalizer",
+      title: "TrueFreight Index | Excel Rate Normalizer",
       description: "Excel rates in. Clean CSV out.",
       type: "website",
-      images: [{ url: imageUrl, width: 1536, height: 1024, alt: "RateFlow — Excel rates in. Clean CSV out." }],
+      images: [{ url: imageUrl, width: 2125, height: 236, alt: "TrueFreight Index from FreightRight" }],
     },
-    twitter: { card: "summary_large_image", title: "RateFlow", description: "Excel rates in. Clean CSV out.", images: [imageUrl] },
+    twitter: { card: "summary_large_image", title: "TrueFreight Index", description: "Excel rates in. Clean CSV out.", images: [imageUrl] },
   };
 }
 

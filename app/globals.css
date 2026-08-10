@@ -10,8 +10,8 @@ body { margin: 0; color: var(--ink); background: var(--paper); font-family: var(
 button, input { font: inherit; } button { cursor: pointer; }
 
 .topbar { height: 72px; display: flex; align-items: center; justify-content: space-between; max-width: 1240px; margin: 0 auto; padding: 0 32px; border-bottom: 1px solid var(--line); }
-.brand { color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 11px; font-size: 18px; font-weight: 720; letter-spacing: -.02em; }
-.brand-mark { width: 38px; height: 38px; display: grid; place-items: center; color: white; background: var(--green); border-radius: 10px; }
+.brand { display: flex; align-items: center; min-width: 0; text-decoration: none; }
+.brand-logo { display: block; width: clamp(235px, 28vw, 320px); height: auto; }
 .privacy-note { color: var(--muted); display: flex; align-items: center; gap: 7px; font-size: 13px; }
 
 .workspace, .results-section { max-width: 1176px; margin: 0 auto; padding: 0 0 64px; }
@@ -112,6 +112,7 @@ tbody tr:nth-child(even) { background: #fafbf9; } tbody tr:hover { background: #
   .metrics { grid-template-columns: 1fr 1fr; } .metrics > div:nth-child(2) { border-right: 0; } .metrics > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
 }
 @media (max-width: 520px) {
+  .brand-logo { width: 220px; }
   .section-heading > p { line-height: 1.5; } .result-actions { flex-direction: column; }
   .metrics { grid-template-columns: 1fr; } .metrics > div { border-right: 0; border-bottom: 1px solid var(--line); } .metrics > div:last-child { border-bottom: 0; }
   .pagination { justify-content: space-between; gap: 8px; } .pagination button { font-size: 0; }
