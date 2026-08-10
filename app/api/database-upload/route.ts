@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import postgres from "postgres";
 import { toDatabaseRecords } from "../../../lib/database-records";
 
@@ -7,12 +8,25 @@ const DATABASE_COLUMNS = [
 ] as const;
 const INSERT_BATCH_SIZE = 500;
 
-export async function POST(request: Request) {
-  const hasSitesIdentity = Boolean(request.headers.get("oai-authenticated-user-id"));
-  const hasCloudflareAccessIdentity = Boolean(request.headers.get("cf-access-jwt-assertion"));
+function passwordsMatch(provided: string, expected: string) {
+  const providedBytes = Buffer.from(provided);
+  const expectedBytes = Buffer.from(expected);
+  return providedBytes.length === expectedBytes.length
+    && timingSafeEqual(providedBytes, expectedBytes);
+}
 
-  if (!hasSitesIdentity && !hasCloudflareAccessIdentity) {
-    return Response.json({ message: "You must be signed in to upload rates." }, { status: 401 });
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+export async function POST(request: Request) {
+  const expectedPassword = process.env.DATABASE_UPLOAD_PASSWORD;
+  if (!expectedPassword) {
+    return Response.json({ message: "Database uploads are not configured." }, { status: 503 });
+  }
+
+  const providedPassword = request.headers.get("x-database-upload-password") ?? "";
+  if (!passwordsMatch(providedPassword, expectedPassword)) {
+    return Response.json({ message: "The database upload passcode is incorrect." }, { status: 401 });
   }
 
   const databaseUrl = process.env.DATABASE_URL;
