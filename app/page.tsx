@@ -2,7 +2,7 @@
 
 import {
   AlertCircle, ArrowLeft, ArrowRight, Check, Database, Download, FileSpreadsheet,
-  LoaderCircle, RefreshCcw, ShieldCheck, UploadCloud, X,
+  LoaderCircle, RefreshCcw, UploadCloud, X,
 } from "lucide-react";
 import Image from "next/image";
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -153,7 +153,6 @@ export default function Home() {
         <a className="brand" href="#top" aria-label="TrueFreight Index home">
           <Image className="brand-logo" src="/tfx-logo-horizontal.png" alt="TrueFreight Index from FreightRight" width={2125} height={236} priority />
         </a>
-        <div className="privacy-note"><ShieldCheck size={16} /> Files stay in your browser</div>
       </header>
 
       <section className="workspace" aria-live="polite">

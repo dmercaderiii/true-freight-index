@@ -12,7 +12,6 @@ button, input { font: inherit; } button { cursor: pointer; }
 .topbar { height: 72px; display: flex; align-items: center; justify-content: space-between; max-width: 1240px; margin: 0 auto; padding: 0 32px; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; min-width: 0; text-decoration: none; }
 .brand-logo { display: block; width: clamp(235px, 28vw, 320px); height: auto; }
-.privacy-note { color: var(--muted); display: flex; align-items: center; gap: 7px; font-size: 13px; }
 
 .workspace, .results-section { max-width: 1176px; margin: 0 auto; padding: 0 0 64px; }
 .workspace { border-top: 1px solid var(--line); padding-top: 34px; }
@@ -104,7 +103,7 @@ tbody tr:nth-child(even) { background: #fafbf9; } tbody tr:hover { background: #
 
 @media (max-width: 1240px) { .workspace, .results-section { margin-left: 32px; margin-right: 32px; } }
 @media (max-width: 780px) {
-  .topbar { height: 64px; padding: 0 20px; } .privacy-note { font-size: 0; }
+  .topbar { height: 64px; padding: 0 20px; }
   .workspace, .results-section { margin-left: 20px; margin-right: 20px; padding-bottom: 46px; }
   .section-heading, .results-header { align-items: flex-start; flex-direction: column; }
   .dropzone { min-height: 300px; padding: 30px 20px; } .file-status { flex-wrap: wrap; } .status-label { width: 100%; padding-left: 60px; }
