@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  AlertCircle, ArrowLeft, ArrowRight, Check, Download, FileSpreadsheet,
+  AlertCircle, ArrowLeft, ArrowRight, Check, Database, Download, FileSpreadsheet,
   LoaderCircle, RefreshCcw, ShieldCheck, UploadCloud, X,
 } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,7 @@ import { OUTPUT_COLUMNS, type TransformationResult } from "../lib/rate-transform
 import rateWorkerUrl from "./rate-worker.ts?worker&url";
 
 type Status = "idle" | "processing" | "success" | "error";
+type DatabaseStatus = "idle" | "uploading" | "success" | "error";
 const PAGE_SIZE = 75;
 
 function formatFileSize(bytes: number) {
@@ -26,6 +27,9 @@ export default function Home() {
   const [error, setError] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const [page, setPage] = useState(1);
+  const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>("idle");
+  const [databaseMessage, setDatabaseMessage] = useState("");
+  const [showDatabaseConfirm, setShowDatabaseConfirm] = useState(false);
 
   useEffect(() => () => workerRef.current?.terminate(), []);
 
@@ -43,6 +47,9 @@ export default function Home() {
     setResult(null);
     setError("");
     setPage(1);
+    setDatabaseStatus("idle");
+    setDatabaseMessage("");
+    setShowDatabaseConfirm(false);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -117,6 +124,28 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
+  async function uploadToDatabase() {
+    if (!result) return;
+    setShowDatabaseConfirm(false);
+    setDatabaseStatus("uploading");
+    setDatabaseMessage("");
+    try {
+      const response = await fetch("/api/database-upload", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rows: result.rows }),
+      });
+      const payload = await response.json() as { inserted?: number; message?: string };
+      if (!response.ok) throw new Error(payload.message || "The database upload failed.");
+      const inserted = payload.inserted ?? result.rows.length;
+      setDatabaseStatus("success");
+      setDatabaseMessage(`${inserted.toLocaleString()} records were appended to the database.`);
+    } catch (uploadError) {
+      setDatabaseStatus("error");
+      setDatabaseMessage(uploadError instanceof Error ? uploadError.message : "The database upload failed.");
+    }
+  }
+
   return (
     <main>
       <header className="topbar">
@@ -186,8 +215,24 @@ export default function Home() {
             <div className="result-actions">
               <button className="secondary-button" type="button" onClick={reset}><RefreshCcw size={17} /> Upload another</button>
               <button className="download-button" type="button" onClick={downloadCsv}><Download size={18} /> Download CSV</button>
+              <button
+                className="database-button"
+                type="button"
+                disabled={databaseStatus === "uploading" || databaseStatus === "success"}
+                onClick={() => setShowDatabaseConfirm(true)}
+              >
+                {databaseStatus === "uploading" ? <LoaderCircle className="spin" size={18} /> : databaseStatus === "success" ? <Check size={18} /> : <Database size={18} />}
+                {databaseStatus === "uploading" ? "Uploading…" : databaseStatus === "success" ? "Uploaded" : "Upload to Database"}
+              </button>
             </div>
           </div>
+
+          {databaseStatus !== "idle" && databaseStatus !== "uploading" && (
+            <div className={`database-result ${databaseStatus}`} role={databaseStatus === "error" ? "alert" : "status"}>
+              {databaseStatus === "success" ? <Check size={19} /> : <AlertCircle size={19} />}
+              <span>{databaseMessage}</span>
+            </div>
+          )}
 
           <div className="metrics" aria-label="Processing summary">
             <div><span>Output records</span><strong>{result.rows.length.toLocaleString()}</strong></div>
@@ -223,6 +268,23 @@ export default function Home() {
             </div>
           </div>
         </section>
+      )}
+
+      {showDatabaseConfirm && result && (
+        <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setShowDatabaseConfirm(false);
+        }}>
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="database-confirm-title">
+            <div className="dialog-icon"><Database size={24} /></div>
+            <h2 id="database-confirm-title">Append records to PostgreSQL?</h2>
+            <p>This will add <strong>{result.rows.length.toLocaleString()} records</strong> to <code>public.tfx_test_environment</code>. Existing records will not be changed.</p>
+            <div className="dialog-warning"><AlertCircle size={17} /> Repeating the same upload will create duplicate records.</div>
+            <div className="dialog-actions">
+              <button className="secondary-button" type="button" onClick={() => setShowDatabaseConfirm(false)}>Cancel</button>
+              <button className="database-button" type="button" onClick={() => void uploadToDatabase()}><Database size={17} /> Upload to Database</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <section className="process-strip">
