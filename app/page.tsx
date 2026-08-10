@@ -4,7 +4,6 @@ import {
   AlertCircle, ArrowLeft, ArrowRight, Check, Database, Download, FileSpreadsheet,
   LoaderCircle, RefreshCcw, UploadCloud, X,
 } from "lucide-react";
-import Image from "next/image";
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { OUTPUT_COLUMNS, type TransformationResult } from "../lib/rate-transformer";
 import rateWorkerUrl from "./rate-worker.ts?worker&url";
@@ -157,7 +156,9 @@ export default function Home() {
     <main id="top">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="TrueFreight Index home">
-          <Image className="brand-logo" src="/tfx-logo-horizontal.png" alt="TrueFreight Index from FreightRight" width={2125} height={236} priority />
+          {/* The source asset is already optimized and does not need a runtime image service. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-logo" src="/tfx-logo-horizontal.png" alt="TrueFreight Index from FreightRight" />
         </a>
       </header>
 
