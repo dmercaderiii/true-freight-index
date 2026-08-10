@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { OUTPUT_COLUMNS, type TransformationResult } from "../lib/rate-transformer";
-import rateWorkerUrl from "./rate-worker.ts?worker&url";
 
 type Status = "idle" | "processing" | "success" | "error";
 type DatabaseStatus = "idle" | "uploading" | "success" | "error";
@@ -35,6 +34,7 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>("idle");
   const [databaseMessage, setDatabaseMessage] = useState("");
+  const [databasePassword, setDatabasePassword] = useState("");
   const [showDatabaseConfirm, setShowDatabaseConfirm] = useState(false);
 
   useEffect(() => () => workerRef.current?.terminate(), []);
@@ -55,6 +55,7 @@ export default function Home() {
     setPage(1);
     setDatabaseStatus("idle");
     setDatabaseMessage("");
+    setDatabasePassword("");
     setShowDatabaseConfirm(false);
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -75,7 +76,7 @@ export default function Home() {
 
     try {
       const buffer = await selected.arrayBuffer();
-      const worker = new Worker(rateWorkerUrl, { type: "module" });
+      const worker = new Worker(new URL("./rate-worker.ts", import.meta.url), { type: "module" });
       workerRef.current?.terminate();
       workerRef.current = worker;
       worker.onmessage = ({ data }) => {
@@ -138,13 +139,17 @@ export default function Home() {
     try {
       const response = await fetch("/api/database-upload", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-database-upload-password": databasePassword,
+        },
         body: JSON.stringify({ rows: result.rows }),
       });
       const payload = await response.json() as { inserted?: number; message?: string };
       if (!response.ok) throw new Error(payload.message || "The database upload failed.");
       const inserted = payload.inserted ?? result.rows.length;
       setDatabaseStatus("success");
+      setDatabasePassword("");
       setDatabaseMessage(`${inserted.toLocaleString()} records were appended to the database.`);
     } catch (uploadError) {
       setDatabaseStatus("error");
@@ -276,10 +281,20 @@ export default function Home() {
             <div className="dialog-icon"><Database size={24} /></div>
             <h2 id="database-confirm-title">Append records to PostgreSQL?</h2>
             <p>This will add <strong>{result.rows.length.toLocaleString()} records</strong> to <code>public.tfx_test_environment</code>. Existing records will not be changed.</p>
+            <label className="dialog-field">
+              <span>Database upload passcode</span>
+              <input
+                type="password"
+                value={databasePassword}
+                onChange={(event) => setDatabasePassword(event.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
             <div className="dialog-warning"><AlertCircle size={17} /> Repeating the same upload will create duplicate records.</div>
             <div className="dialog-actions">
               <button className="secondary-button" type="button" onClick={() => setShowDatabaseConfirm(false)}>Cancel</button>
-              <button className="database-button" type="button" onClick={() => void uploadToDatabase()}><Database size={17} /> Upload to Database</button>
+              <button className="database-button" type="button" disabled={!databasePassword} onClick={() => void uploadToDatabase()}><Database size={17} /> Upload to Database</button>
             </div>
           </div>
         </div>

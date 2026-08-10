@@ -30,36 +30,20 @@ npm run build
 
 The database upload endpoint requires a server-only `DATABASE_URL` environment variable.
 
-## Cloudflare Workers deployment
+## Vercel deployment
 
-The repository includes a native Workers configuration for the free
-`true-freight-index.<account-subdomain>.workers.dev` address.
+Import this GitHub repository as a new Vercel project. Vercel detects the
+Next.js application automatically; keep the root directory as the repository
+root and use the default build settings.
 
-In **Workers & Pages**, choose **Create application**, import this GitHub
-repository, and use:
+The converter and CSV download can remain public. Database uploads require a
+separate passcode and stay disabled until both of these Production environment
+variables are configured in Vercel:
 
-- Production branch: `main`
-- Build command: `npm run build`
-- Deploy command: `npm run deploy:cloudflare:skip-build`
-- Root directory: `/`
+- `DATABASE_URL`: the complete PostgreSQL connection string, including the
+  database name and `sslmode=require`.
+- `DATABASE_UPLOAD_PASSWORD`: a strong passcode shared only with colleagues who
+  may append records.
 
-The first deployment should be completed without `DATABASE_URL`. The site will
-work, but database uploads will stay disabled until access protection is in
-place.
-
-Before enabling database uploads:
-
-1. In Cloudflare Zero Trust, add a self-hosted Access application for the
-   `true-freight-index` Worker and select the Worker by name.
-2. Use Cloudflare as the identity provider with **Restrict to account members**
-   enabled. Add an Allow policy using **Cloudflare Account Member** for the
-   current account. No email list or custom domain is required.
-3. Rotate the PostgreSQL password if it has ever been shared in chat, source
-   code, or screenshots.
-4. In the Worker's **Settings > Variables and Secrets**, add `DATABASE_URL` as
-   an encrypted secret. Use a PostgreSQL connection string with the database
-   name included and `sslmode=require`.
-
-The upload route accepts authenticated identity headers from the existing Sites
-host or Cloudflare Access. Do not configure `DATABASE_URL` on a publicly
-accessible Worker that is not protected by Access.
+Rotate any PostgreSQL password that has previously been shared in chat, source
+code, or screenshots. Redeploy after adding or changing environment variables.

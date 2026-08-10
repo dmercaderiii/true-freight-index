@@ -96,6 +96,9 @@ tbody tr:nth-child(even) { background: #fafbf9; } tbody tr:hover { background: #
 .confirm-dialog h2 { margin: 0 0 10px; font-size: 23px; letter-spacing: -.03em; }
 .confirm-dialog > p { color: var(--muted); margin: 0; font-size: 14px; line-height: 1.65; }
 .confirm-dialog code { color: var(--green-dark); background: #edf5f1; padding: 2px 5px; border-radius: 4px; font: 12px var(--font-geist-mono), monospace; }
+.dialog-field { display: grid; gap: 7px; margin-top: 20px; color: var(--ink); font-size: 12px; font-weight: 650; }
+.dialog-field input { width: 100%; border: 1px solid var(--line); border-radius: 7px; padding: 11px 12px; color: var(--ink); background: white; font: 14px var(--font-geist-sans), sans-serif; }
+.dialog-field input:focus { outline: 2px solid rgba(21, 107, 79, .25); border-color: var(--green); }
 .dialog-warning { display: flex; align-items: flex-start; gap: 8px; color: #8b570d; background: #fff8ea; border: 1px solid #ead8b8; padding: 12px 13px; margin: 20px 0; font-size: 12px; line-height: 1.45; }
 .dialog-warning svg { flex: 0 0 auto; margin-top: 1px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
