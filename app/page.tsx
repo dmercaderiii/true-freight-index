@@ -8,7 +8,8 @@ import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "re
 import { OUTPUT_COLUMNS, type TransformationResult } from "../lib/rate-transformer";
 
 type Status = "idle" | "processing" | "success" | "error";
-type DatabaseStatus = "idle" | "uploading" | "success" | "error";
+type DatabaseStatus = "idle" | "checking" | "uploading" | "success" | "duplicate" | "error";
+type DuplicateCheck = { total: number; duplicates: number; fresh: number };
 const PAGE_SIZE = 75;
 
 function formatFileSize(bytes: number) {
@@ -36,6 +37,7 @@ export default function Home() {
   const [databaseMessage, setDatabaseMessage] = useState("");
   const [databasePassword, setDatabasePassword] = useState("");
   const [showDatabaseConfirm, setShowDatabaseConfirm] = useState(false);
+  const [duplicateCheck, setDuplicateCheck] = useState<DuplicateCheck | null>(null);
 
   useEffect(() => () => workerRef.current?.terminate(), []);
 
@@ -59,6 +61,7 @@ export default function Home() {
     setDatabaseMessage("");
     setDatabasePassword("");
     setShowDatabaseConfirm(false);
+    setDuplicateCheck(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -133,29 +136,87 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
-  async function uploadToDatabase() {
-    if (!result || !canExport) return;
+  function closeDatabaseConfirm() {
+    // Drop the pending check so reopening the dialog always re-checks against the database.
+    setShowDatabaseConfirm(false);
+    setDuplicateCheck(null);
+    setDatabaseStatus("idle");
+  }
+
+  async function postRows(mode: "check" | "insert", rows: TransformationResult["rows"]) {
+    const response = await fetch("/api/database-upload", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-database-upload-password": databasePassword,
+      },
+      body: JSON.stringify({ rows, mode }),
+    });
+    const payload = await response.json() as Partial<DuplicateCheck> & { inserted?: number; message?: string };
+    if (!response.ok) throw new Error(payload.message || "The database upload failed.");
+    return payload;
+  }
+
+  function failUpload(uploadError: unknown) {
+    setShowDatabaseConfirm(false);
+    setDuplicateCheck(null);
+    setDatabaseStatus("error");
+    setDatabaseMessage(uploadError instanceof Error ? uploadError.message : "The database upload failed.");
+  }
+
+  async function appendRecords() {
+    if (!result) return;
     setShowDatabaseConfirm(false);
     setDatabaseStatus("uploading");
+    try {
+      const payload = await postRows("insert", result.rows);
+      const inserted = payload.inserted ?? 0;
+      const duplicates = payload.duplicates ?? 0;
+      setDatabasePassword("");
+      setDuplicateCheck(null);
+      setDatabaseStatus("success");
+      setDatabaseMessage(duplicates
+        ? `${inserted.toLocaleString()} new record${inserted === 1 ? "" : "s"} were appended. ${duplicates.toLocaleString()} duplicate${duplicates === 1 ? "" : "s"} were skipped.`
+        : `${inserted.toLocaleString()} records were appended to the database.`);
+    } catch (uploadError) {
+      failUpload(uploadError);
+    }
+  }
+
+  /**
+   * Compares the records against the database before writing. An entirely duplicate upload is
+   * refused outright; a partly duplicate one waits for the user to confirm the new records.
+   */
+  async function checkThenAppend() {
+    if (!result || !canExport) return;
+    if (duplicateCheck) {
+      await appendRecords();
+      return;
+    }
+
+    setDatabaseStatus("checking");
     setDatabaseMessage("");
     try {
-      const response = await fetch("/api/database-upload", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-database-upload-password": databasePassword,
-        },
-        body: JSON.stringify({ rows: result.rows }),
-      });
-      const payload = await response.json() as { inserted?: number; message?: string };
-      if (!response.ok) throw new Error(payload.message || "The database upload failed.");
-      const inserted = payload.inserted ?? result.rows.length;
-      setDatabaseStatus("success");
-      setDatabasePassword("");
-      setDatabaseMessage(`${inserted.toLocaleString()} records were appended to the database.`);
+      const payload = await postRows("check", result.rows);
+      const total = payload.total ?? result.rows.length;
+      const duplicates = payload.duplicates ?? 0;
+      const fresh = payload.fresh ?? total;
+
+      if (fresh === 0) {
+        setShowDatabaseConfirm(false);
+        setDatabasePassword("");
+        setDatabaseStatus("duplicate");
+        setDatabaseMessage(`Duplicate upload. All ${total.toLocaleString()} records are already in the database, so nothing was uploaded.`);
+        return;
+      }
+      if (duplicates > 0) {
+        setDuplicateCheck({ total, duplicates, fresh });
+        setDatabaseStatus("idle");
+        return;
+      }
+      await appendRecords();
     } catch (uploadError) {
-      setDatabaseStatus("error");
-      setDatabaseMessage(uploadError instanceof Error ? uploadError.message : "The database upload failed.");
+      failUpload(uploadError);
     }
   }
 
@@ -231,12 +292,20 @@ export default function Home() {
               <button
                 className="database-button"
                 type="button"
-                disabled={!canExport || databaseStatus === "uploading" || databaseStatus === "success"}
-                title={canExport ? undefined : "Resolve the reported issues before uploading."}
-                onClick={() => setShowDatabaseConfirm(true)}
+                disabled={!canExport || databaseStatus === "checking" || databaseStatus === "uploading"
+                  || databaseStatus === "success" || databaseStatus === "duplicate"}
+                title={canExport
+                  ? (databaseStatus === "duplicate" ? "Every record is already in the database." : undefined)
+                  : "Resolve the reported issues before uploading."}
+                onClick={() => { setDuplicateCheck(null); setShowDatabaseConfirm(true); }}
               >
-                {databaseStatus === "uploading" ? <LoaderCircle className="spin" size={18} /> : databaseStatus === "success" ? <Check size={18} /> : <Database size={18} />}
-                {databaseStatus === "uploading" ? "Uploading…" : databaseStatus === "success" ? "Uploaded" : "Upload to Database"}
+                {databaseStatus === "checking" || databaseStatus === "uploading" ? <LoaderCircle className="spin" size={18} />
+                  : databaseStatus === "success" ? <Check size={18} />
+                  : databaseStatus === "duplicate" ? <AlertCircle size={18} /> : <Database size={18} />}
+                {databaseStatus === "checking" ? "Checking…"
+                  : databaseStatus === "uploading" ? "Uploading…"
+                  : databaseStatus === "success" ? "Uploaded"
+                  : databaseStatus === "duplicate" ? "Already in database" : "Upload to Database"}
               </button>
             </div>
           </div>
@@ -252,8 +321,8 @@ export default function Home() {
             </div>
           )}
 
-          {databaseStatus !== "idle" && databaseStatus !== "uploading" && (
-            <div className={`database-result ${databaseStatus}`} role={databaseStatus === "error" ? "alert" : "status"}>
+          {(databaseStatus === "success" || databaseStatus === "duplicate" || databaseStatus === "error") && (
+            <div className={`database-result ${databaseStatus}`} role={databaseStatus === "success" ? "status" : "alert"}>
               {databaseStatus === "success" ? <Check size={19} /> : <AlertCircle size={19} />}
               <span>{databaseMessage}</span>
             </div>
@@ -297,12 +366,16 @@ export default function Home() {
 
       {showDatabaseConfirm && result && (
         <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setShowDatabaseConfirm(false);
+          if (event.target === event.currentTarget) closeDatabaseConfirm();
         }}>
           <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="database-confirm-title">
             <div className="dialog-icon"><Database size={24} /></div>
             <h2 id="database-confirm-title">Append records to PostgreSQL?</h2>
-            <p>This will add <strong>{result.rows.length.toLocaleString()} records</strong> to <code>public.tfx_test_environment</code>. Existing records will not be changed.</p>
+            <p>
+              {duplicateCheck
+                ? <>This will add the <strong>{duplicateCheck.fresh.toLocaleString()} new record{duplicateCheck.fresh === 1 ? "" : "s"}</strong> to <code>public.tfx_test_environment</code>. Existing records will not be changed.</>
+                : <>This will add up to <strong>{result.rows.length.toLocaleString()} records</strong> to <code>public.tfx_test_environment</code>. Existing records will not be changed.</>}
+            </p>
             <label className="dialog-field">
               <span>Database upload passcode</span>
               <input
@@ -313,10 +386,24 @@ export default function Home() {
                 required
               />
             </label>
-            <div className="dialog-warning"><AlertCircle size={17} /> Repeating the same upload will create duplicate records.</div>
+            <div className="dialog-warning" role={duplicateCheck ? "alert" : undefined}>
+              <AlertCircle size={17} />
+              {duplicateCheck
+                ? <span><strong>{duplicateCheck.duplicates.toLocaleString()} of {duplicateCheck.total.toLocaleString()} records are already in the database</strong> and will be skipped. Continue to append only the {duplicateCheck.fresh.toLocaleString()} new record{duplicateCheck.fresh === 1 ? "" : "s"}.</span>
+                : <span>Records already in the database are detected and skipped, so repeating an upload will not create duplicates.</span>}
+            </div>
             <div className="dialog-actions">
-              <button className="secondary-button" type="button" onClick={() => setShowDatabaseConfirm(false)}>Cancel</button>
-              <button className="database-button" type="button" disabled={!databasePassword} onClick={() => void uploadToDatabase()}><Database size={17} /> Upload to Database</button>
+              <button className="secondary-button" type="button" onClick={closeDatabaseConfirm}>Cancel</button>
+              <button
+                className="database-button"
+                type="button"
+                disabled={!databasePassword || databaseStatus === "checking" || databaseStatus === "uploading"}
+                onClick={() => void checkThenAppend()}
+              >
+                {databaseStatus === "checking" ? <><LoaderCircle className="spin" size={17} /> Checking for duplicates…</>
+                  : duplicateCheck ? <><Database size={17} /> Upload {duplicateCheck.fresh.toLocaleString()} new record{duplicateCheck.fresh === 1 ? "" : "s"}</>
+                  : <><Database size={17} /> Upload to Database</>}
+              </button>
             </div>
           </div>
         </div>
