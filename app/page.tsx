@@ -39,6 +39,8 @@ export default function Home() {
 
   useEffect(() => () => workerRef.current?.terminate(), []);
 
+  // Reported issues mean the source workbook needs fixing, so exports stay blocked until it is clean.
+  const canExport = Boolean(result && result.issues.length === 0 && result.rows.length > 0);
   const pageCount = result ? Math.max(1, Math.ceil(result.rows.length / PAGE_SIZE)) : 1;
   const visibleRows = useMemo(
     () => result?.rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) ?? [],
@@ -119,7 +121,7 @@ export default function Home() {
   }
 
   function downloadCsv() {
-    if (!result) return;
+    if (!result || !canExport) return;
     const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -132,7 +134,7 @@ export default function Home() {
   }
 
   async function uploadToDatabase() {
-    if (!result) return;
+    if (!result || !canExport) return;
     setShowDatabaseConfirm(false);
     setDatabaseStatus("uploading");
     setDatabaseMessage("");
@@ -217,11 +219,20 @@ export default function Home() {
             <div><span className="step-number">02</span><h2>Review Data</h2><p>Showing all 12 output fields. The downloaded CSV has no header row.</p></div>
             <div className="result-actions">
               <button className="secondary-button" type="button" onClick={reset}><RefreshCcw size={17} /> Upload another</button>
-              <button className="download-button" type="button" onClick={downloadCsv}><Download size={18} /> Download CSV</button>
+              <button
+                className="download-button"
+                type="button"
+                disabled={!canExport}
+                title={canExport ? undefined : "Resolve the reported issues before downloading."}
+                onClick={downloadCsv}
+              >
+                <Download size={18} /> Download CSV
+              </button>
               <button
                 className="database-button"
                 type="button"
-                disabled={databaseStatus === "uploading" || databaseStatus === "success"}
+                disabled={!canExport || databaseStatus === "uploading" || databaseStatus === "success"}
+                title={canExport ? undefined : "Resolve the reported issues before uploading."}
                 onClick={() => setShowDatabaseConfirm(true)}
               >
                 {databaseStatus === "uploading" ? <LoaderCircle className="spin" size={18} /> : databaseStatus === "success" ? <Check size={18} /> : <Database size={18} />}
@@ -229,6 +240,17 @@ export default function Home() {
               </button>
             </div>
           </div>
+
+          {!canExport && (
+            <div className="database-result error" role="alert">
+              <AlertCircle size={19} />
+              <span>
+                {result.rows.length === 0
+                  ? "No records passed validation. Correct the source workbook and upload it again."
+                  : `Download and database upload are disabled until all ${result.issues.length.toLocaleString()} reported issue${result.issues.length === 1 ? "" : "s"} ${result.issues.length === 1 ? "is" : "are"} corrected in the source workbook.`}
+              </span>
+            </div>
+          )}
 
           {databaseStatus !== "idle" && databaseStatus !== "uploading" && (
             <div className={`database-result ${databaseStatus}`} role={databaseStatus === "error" ? "alert" : "status"}>
