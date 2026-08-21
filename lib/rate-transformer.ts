@@ -30,10 +30,36 @@ const CONTAINERS = [
 
 const TRADE_MAP: Record<string, "USEC" | "USWC"> = { "CEA-USEC": "USEC", "CEA-USWC": "USWC" };
 
+/** Effective dates follow a weekly cadence and must land on one of these days of the month. */
+export const APPROVED_EFF_DATE_DAYS = [1, 8, 15, 22] as const;
+
+export const APPROVED_ORIGINS = ["Ningbo", "Yantian", "Shanghai", "Kaohsiung", "Vung Tau",
+  "Singapore", "Hong Kong", "Pusan", "Kobe", "Busan"] as const;
+
+/**
+ * Approved destinations and the Trade each one must use. Combined values such as
+ * "Los Angeles/Long Beach" are split before validation, so only single ports are listed.
+ */
+export const APPROVED_DESTINATIONS: Record<string, "USEC" | "USWC"> = {
+  "Los Angeles": "USWC", "Long Beach": "USWC", "Vancouver": "USWC",
+  Oakland: "USWC", Seattle: "USWC", Tacoma: "USWC",
+  "New York": "USEC", Newark: "USEC", Norfolk: "USEC", Charleston: "USEC",
+  Savannah: "USEC", Houston: "USEC", Baltimore: "USEC",
+};
+
 function cellText(value: unknown): string {
   if (value === null || value === undefined) return "";
   return String(value);
 }
+
+function normalizeLocation(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+const EFF_DATE_DAYS = new Set<number>(APPROVED_EFF_DATE_DAYS);
+const ORIGIN_LOOKUP = new Set(APPROVED_ORIGINS.map(normalizeLocation));
+const DESTINATION_LOOKUP = new Map(Object.entries(APPROVED_DESTINATIONS)
+  .map(([name, coast]) => [normalizeLocation(name), coast] as const));
 
 function splitLocation(value: unknown): string[] {
   const valueText = cellText(value);
@@ -107,6 +133,61 @@ export function rowsFromMatrix(matrix: unknown[][]): SourceRateRow[] {
   });
 }
 
+type SourceValidation = { issues: ProcessingIssue[]; trade: "USEC" | "USWC" | null };
+
+/**
+ * Checks a source row against the approved trades, effective-date cadence, and port lists.
+ * Any reported issue rejects the whole row so partial data never reaches the output.
+ */
+function validateSourceRow(source: SourceRateRow, sourceRow: number): SourceValidation {
+  const issues: ProcessingIssue[] = [];
+  const reject = (reason: string) => issues.push({ sourceRow, reason, level: "error" });
+
+  const originText = cellText(source.Origin).trim();
+  const destinationText = cellText(source.Destination).trim();
+  const tradeText = cellText(source.Trade).trim();
+
+  if (!originText) reject("Origin is blank.");
+  if (!destinationText) reject("Destination is blank.");
+  if (!tradeText) reject("Trade is blank.");
+
+  const trade = TRADE_MAP[tradeText.toUpperCase()] ?? null;
+  if (tradeText && !trade) {
+    reject(`Unsupported Trade value “${tradeText}”. Use CEA-USEC or CEA-USWC.`);
+  }
+
+  const effDate = formatEffectiveDate(source["Eff Date"]);
+  const effDateParts = effDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!effDate) {
+    reject("Eff Date is blank.");
+  } else if (!effDateParts) {
+    reject(`Eff Date “${effDate}” is not a valid M/D/YYYY date.`);
+  } else if (!EFF_DATE_DAYS.has(Number(effDateParts[2]))) {
+    reject(`Eff Date “${effDate}” must fall on day ${APPROVED_EFF_DATE_DAYS.join(", ")} of the month.`);
+  }
+
+  if (originText) {
+    for (const origin of splitLocation(originText)) {
+      if (!ORIGIN_LOOKUP.has(normalizeLocation(origin))) {
+        reject(`Origin “${origin}” is not an approved origin port.`);
+      }
+    }
+  }
+
+  if (destinationText) {
+    for (const destination of splitLocation(destinationText)) {
+      const requiredCoast = DESTINATION_LOOKUP.get(normalizeLocation(destination));
+      if (!requiredCoast) {
+        reject(`Destination “${destination}” is not an approved destination port.`);
+      } else if (trade && requiredCoast !== trade) {
+        reject(`Destination “${destination}” must use Trade CEA-${requiredCoast}, not ${tradeText}.`);
+      }
+    }
+  }
+
+  return { issues, trade };
+}
+
 export function transformRateRows(sourceRows: SourceRateRow[]): TransformationResult {
   const issues: ProcessingIssue[] = [];
   const decorated: Array<{ row: OutputRow; sourceIndex: number; combinationIndex: number; containerRank: number }> = [];
@@ -114,10 +195,11 @@ export function transformRateRows(sourceRows: SourceRateRow[]): TransformationRe
 
   sourceRows.forEach((source, sourceIndex) => {
     const sourceRow = sourceIndex + 2;
-    const trade = TRADE_MAP[cellText(source.Trade).trim().toUpperCase()];
-    if (!trade) {
+    const validation = validateSourceRow(source, sourceRow);
+    const trade = validation.trade;
+    if (validation.issues.length || !trade) {
       skippedRows += 1;
-      issues.push({ sourceRow, reason: `Unsupported Trade value “${cellText(source.Trade) || "blank"}”.`, level: "error" });
+      issues.push(...validation.issues);
       return;
     }
 
