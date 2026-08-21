@@ -66,6 +66,7 @@ button, input { font: inherit; } button { cursor: pointer; }
 .database-result { display: flex; align-items: center; gap: 10px; padding: 14px 17px; margin-bottom: 18px; border: 1px solid; font-size: 13px; }
 .database-result.success { color: #155d47; border-color: #b7d9cc; background: #f0faf6; }
 .database-result.error { color: #963a33; border-color: #e8c4bf; background: #fff7f5; }
+.database-result.duplicate { color: #8b570d; border-color: #ead8b8; background: #fff8ea; }
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); background: white; margin-bottom: 18px; }
 .metrics > div { padding: 20px 22px; border-right: 1px solid var(--line); } .metrics > div:last-child { border-right: 0; }
 .metrics span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 8px; }

@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import postgres from "postgres";
-import { toDatabaseRecords } from "../../../lib/database-records";
+import {
+  partitionNewRecords, recordKey, toDatabaseRecords, type RecordIdentity,
+} from "../../../lib/database-records";
 
 const DATABASE_COLUMNS = [
   "agent", "carrier", "effective_date", "commodity", "origin", "origin_via",
@@ -35,7 +37,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json() as { rows?: unknown };
+    const body = await request.json() as { rows?: unknown; mode?: unknown };
+    // "check" reports what would happen without writing, so the client can confirm first.
+    const checkOnly = body.mode === "check";
     const records = toDatabaseRecords(body.rows);
     const sql = postgres(databaseUrl, {
       ssl: "require",
@@ -45,21 +49,46 @@ export async function POST(request: Request) {
       prepare: false,
     });
 
+    const effectiveDates = [...new Set(records.map((record) => record.effective_date))];
+    const datedValues = effectiveDates.filter((date): date is string => date !== null);
+    const hasUndatedRecord = effectiveDates.length !== datedValues.length;
+    let inserted = 0;
+    let duplicates = 0;
+    let fresh = 0;
+
     try {
       await sql.begin(async (transaction) => {
-        for (let index = 0; index < records.length; index += INSERT_BATCH_SIZE) {
-          const batch = records.slice(index, index + INSERT_BATCH_SIZE);
+        // Only the effective dates in this payload can collide, so the lookup stays bounded.
+        // The ::date casts keep this correct whether the column is a date or holds ISO text,
+        // and to_char returns the same YYYY-MM-DD strings the records carry.
+        const stored = await transaction<RecordIdentity[]>`
+          select agent, carrier, to_char(effective_date::date, 'YYYY-MM-DD') as effective_date,
+            commodity, origin, origin_via, destination, destination_via, container_size, trade
+          from public.tfx_test_environment
+          where effective_date::date = any(${datedValues}::date[])
+            or (${hasUndatedRecord} and effective_date is null)
+        `;
+
+        const partition = partitionNewRecords(records, stored.map((row) => recordKey(row)));
+        duplicates = partition.duplicates;
+        fresh = partition.fresh.length;
+        if (checkOnly) return;
+
+        for (let index = 0; index < partition.fresh.length; index += INSERT_BATCH_SIZE) {
+          const batch = partition.fresh.slice(index, index + INSERT_BATCH_SIZE);
           await transaction`
             insert into public.tfx_test_environment
             ${transaction(batch, ...DATABASE_COLUMNS)}
           `;
         }
+        inserted = partition.fresh.length;
       });
     } finally {
       await sql.end({ timeout: 3 });
     }
 
-    return Response.json({ inserted: records.length });
+    const total = records.length;
+    return Response.json(checkOnly ? { total, duplicates, fresh } : { total, duplicates, inserted });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Database upload failed.";
     console.error("Rate database upload failed:", message);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { toDatabaseRecord, toDatabaseRecords } from "../lib/database-records";
+import {
+  partitionNewRecords, recordKey, toDatabaseRecord, toDatabaseRecords,
+} from "../lib/database-records";
 
 describe("database record mapping", () => {
   it("maps USEC output to cea_nae and converts blanks to null", () => {
@@ -28,5 +30,60 @@ describe("database record mapping", () => {
     expect(() => toDatabaseRecord([
       "A", "B", "2/30/2026", "FAK", "O", "", "D", "", "20FT", "USEC", "1", "",
     ])).toThrow(/date is invalid/);
+  });
+});
+
+describe("duplicate upload detection", () => {
+  const row = (over: Partial<Record<number, string>> = {}) => toDatabaseRecord([
+    "OST", "EMC", "1/1/2026", "FAK", "Pusan", "", "Baltimore", "", "20FT", "USEC", "1905", "",
+  ].map((value, index) => over[index] ?? value));
+
+  it("ignores the rate amounts when identifying a record", () => {
+    expect(recordKey(row({ 10: "2500" }))).toBe(recordKey(row()));
+  });
+
+  it.each([[0, "Agent"], [1, "Carrier"], [2, "1/8/2026"], [3, "Commodity"], [4, "Ningbo"],
+    [5, "Origin Via"], [6, "Savannah"], [7, "Destination Via"], [8, "40HC"]] as const)(
+    "treats a different value in column %i as a different record", (index, value) => {
+      expect(recordKey(row({ [index]: value }))).not.toBe(recordKey(row()));
+    });
+
+  it("does not confuse a blank column with a neighbouring value", () => {
+    // "Los Angeles" + blank via must not collide with "Los" + "Angeles".
+    const joined = recordKey(row({ 6: "Los Angeles", 7: "" }));
+    const split = recordKey(row({ 6: "Los", 7: "Angeles" }));
+    expect(joined).not.toBe(split);
+  });
+
+  it("keeps every record when the table is empty", () => {
+    const records = [row(), row({ 8: "40FT" })];
+    expect(partitionNewRecords(records, [])).toEqual({ fresh: records, duplicates: 0 });
+  });
+
+  it("skips records already stored and inserts the rest", () => {
+    const stored = row();
+    const fresh = row({ 8: "40FT" });
+    const partition = partitionNewRecords([stored, fresh], [recordKey(stored)]);
+    expect(partition.fresh).toEqual([fresh]);
+    expect(partition.duplicates).toBe(1);
+  });
+
+  it("skips the whole payload when the same upload is repeated", () => {
+    const records = [row(), row({ 8: "40FT" }), row({ 8: "40HC" })];
+    const partition = partitionNewRecords(records, records.map(recordKey));
+    expect(partition.fresh).toEqual([]);
+    expect(partition.duplicates).toBe(3);
+  });
+
+  it("collapses records that repeat within a single payload", () => {
+    const partition = partitionNewRecords([row(), row(), row({ 8: "40FT" })], []);
+    expect(partition.fresh).toHaveLength(2);
+    expect(partition.duplicates).toBe(1);
+  });
+
+  it("does not mutate the caller's set of stored keys", () => {
+    const stored = new Set([recordKey(row())]);
+    partitionNewRecords([row({ 8: "40FT" })], stored);
+    expect(stored.size).toBe(1);
   });
 });

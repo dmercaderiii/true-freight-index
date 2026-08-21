@@ -15,6 +15,46 @@ export type DatabaseRateRecord = {
 
 const MAX_DATABASE_ROWS = 50_000;
 
+/**
+ * Columns that identify a rate quote. Two records matching on all of them are the same
+ * quote, so only the rate amounts (cea_nae / cea_naw) are excluded.
+ */
+export const IDENTITY_COLUMNS = ["agent", "carrier", "effective_date", "commodity", "origin",
+  "origin_via", "destination", "destination_via", "container_size", "trade"] as const;
+
+export type RecordIdentity = Pick<DatabaseRateRecord, (typeof IDENTITY_COLUMNS)[number]>;
+
+/** Joins the identity columns with a null byte, which cannot occur in the column values. */
+export function recordKey(record: RecordIdentity): string {
+  return IDENTITY_COLUMNS.map((column) => record[column] ?? "").join("\u0000");
+}
+
+/**
+ * Splits records into those not already stored and a count of those that are. Records that
+ * repeat within the payload itself also count as duplicates, so a single upload cannot
+ * insert the same quote twice.
+ */
+export function partitionNewRecords(
+  records: DatabaseRateRecord[],
+  existingKeys: Iterable<string>,
+): { fresh: DatabaseRateRecord[]; duplicates: number } {
+  const seen = new Set(existingKeys);
+  const fresh: DatabaseRateRecord[] = [];
+  let duplicates = 0;
+
+  for (const record of records) {
+    const key = recordKey(record);
+    if (seen.has(key)) {
+      duplicates += 1;
+      continue;
+    }
+    seen.add(key);
+    fresh.push(record);
+  }
+
+  return { fresh, duplicates };
+}
+
 function nullableText(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const text = String(value).trim();
