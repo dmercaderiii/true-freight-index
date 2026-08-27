@@ -59,13 +59,13 @@ export async function POST(request: Request) {
     try {
       await sql.begin(async (transaction) => {
         // Only the effective dates in this payload can collide, so the lookup stays bounded.
-        // The ::date casts keep this correct whether the column is a date or holds ISO text,
-        // and to_char returns the same YYYY-MM-DD strings the records carry.
+        // effective_date is a date column, so it is compared uncast to stay index-friendly;
+        // to_char returns the YYYY-MM-DD strings the records carry rather than Date objects.
         const stored = await transaction<RecordIdentity[]>`
-          select agent, carrier, to_char(effective_date::date, 'YYYY-MM-DD') as effective_date,
+          select agent, carrier, to_char(effective_date, 'YYYY-MM-DD') as effective_date,
             commodity, origin, origin_via, destination, destination_via, container_size, trade
-          from public.tfx_test_environment
-          where effective_date::date = any(${datedValues}::date[])
+          from public.rate_analysis_test_environment
+          where effective_date = any(${datedValues}::date[])
             or (${hasUndatedRecord} and effective_date is null)
         `;
 
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         for (let index = 0; index < partition.fresh.length; index += INSERT_BATCH_SIZE) {
           const batch = partition.fresh.slice(index, index + INSERT_BATCH_SIZE);
           await transaction`
-            insert into public.tfx_test_environment
+            insert into public.rate_analysis_test_environment
             ${transaction(batch, ...DATABASE_COLUMNS)}
           `;
         }
