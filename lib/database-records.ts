@@ -30,29 +30,36 @@ export function recordKey(record: RecordIdentity): string {
 }
 
 /**
- * Splits records into those not already stored and a count of those that are. Records that
- * repeat within the payload itself also count as duplicates, so a single upload cannot
- * insert the same quote twice.
+ * Splits records into those worth inserting and counts of those that are not, keeping the two
+ * reasons apart: `stored` is already in the database, while `repeated` is a row the payload
+ * itself lists more than once. Both are skipped, but they mean different things to the user,
+ * so they are never summed into a single "duplicate" figure.
  */
 export function partitionNewRecords(
   records: DatabaseRateRecord[],
   existingKeys: Iterable<string>,
-): { fresh: DatabaseRateRecord[]; duplicates: number } {
-  const seen = new Set(existingKeys);
+): { fresh: DatabaseRateRecord[]; stored: number; repeated: number } {
+  const storedKeys = new Set(existingKeys);
+  const seen = new Set<string>();
   const fresh: DatabaseRateRecord[] = [];
-  let duplicates = 0;
+  let stored = 0;
+  let repeated = 0;
 
   for (const record of records) {
     const key = recordKey(record);
+    if (storedKeys.has(key)) {
+      stored += 1;
+      continue;
+    }
     if (seen.has(key)) {
-      duplicates += 1;
+      repeated += 1;
       continue;
     }
     seen.add(key);
     fresh.push(record);
   }
 
-  return { fresh, duplicates };
+  return { fresh, stored, repeated };
 }
 
 function nullableText(value: unknown): string | null {
