@@ -9,22 +9,14 @@ import { OUTPUT_COLUMNS, type TransformationResult } from "../lib/rate-transform
 
 type Status = "idle" | "processing" | "success" | "error";
 type DatabaseStatus = "idle" | "checking" | "uploading" | "success" | "duplicate" | "error";
-/** `stored` is already in the database; `repeated` is a row the workbook itself lists twice. */
-type DuplicateCheck = { total: number; stored: number; repeated: number; fresh: number };
+/** `stored` counts payload records already present in the database; the rest are `fresh`. */
+type DuplicateCheck = { total: number; stored: number; fresh: number };
 const PAGE_SIZE = 75;
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-}
-
-/** Names what was left out, keeping stored rows and in-workbook repeats clearly distinct. */
-function skippedSentence(stored: number, repeated: number) {
-  const parts: string[] = [];
-  if (stored) parts.push(`${stored.toLocaleString()} ${stored === 1 ? "was" : "were"} already in the database`);
-  if (repeated) parts.push(`${repeated.toLocaleString()} ${repeated === 1 ? "was a repeat" : "were repeats"} of other rows in the workbook`);
-  return parts.length ? `Skipped: ${parts.join(", and ")}.` : "";
 }
 
 function buildCsvFilename(date = new Date()) {
@@ -180,13 +172,13 @@ export default function Home() {
     try {
       const payload = await postRows("insert", result.rows);
       const inserted = payload.inserted ?? 0;
+      const stored = payload.stored ?? 0;
       setDatabasePassword("");
       setDuplicateCheck(null);
       setDatabaseStatus("success");
-      setDatabaseMessage([
-        `${inserted.toLocaleString()} record${inserted === 1 ? "" : "s"} were appended to the database.`,
-        skippedSentence(payload.stored ?? 0, payload.repeated ?? 0),
-      ].filter(Boolean).join(" "));
+      setDatabaseMessage(stored
+        ? `${inserted.toLocaleString()} record${inserted === 1 ? "" : "s"} were appended. ${stored.toLocaleString()} ${stored === 1 ? "was" : "were"} already in the database and ${stored === 1 ? "was" : "were"} skipped.`
+        : `${inserted.toLocaleString()} records were appended to the database.`);
     } catch (uploadError) {
       failUpload(uploadError);
     }
@@ -209,11 +201,8 @@ export default function Home() {
       const payload = await postRows("check", result.rows);
       const total = payload.total ?? result.rows.length;
       const stored = payload.stored ?? 0;
-      const repeated = payload.repeated ?? 0;
       const fresh = payload.fresh ?? total;
 
-      // Only rows already in the database make an upload a true duplicate; a workbook that
-      // merely repeats its own rows still has something new to contribute.
       if (fresh === 0 && stored > 0) {
         setShowDatabaseConfirm(false);
         setDatabasePassword("");
@@ -221,8 +210,8 @@ export default function Home() {
         setDatabaseMessage(`Duplicate upload. All ${total.toLocaleString()} records are already in the database, so nothing was uploaded.`);
         return;
       }
-      if (stored > 0 || repeated > 0) {
-        setDuplicateCheck({ total, stored, repeated, fresh });
+      if (stored > 0) {
+        setDuplicateCheck({ total, stored, fresh });
         setDatabaseStatus("idle");
         return;
       }
@@ -401,17 +390,7 @@ export default function Home() {
             <div className="dialog-warning" role={duplicateCheck ? "alert" : undefined}>
               <AlertCircle size={17} />
               {duplicateCheck
-                ? (
-                  <span>
-                    {duplicateCheck.stored > 0 && (
-                      <><strong>{duplicateCheck.stored.toLocaleString()} of {duplicateCheck.total.toLocaleString()} records are already in the database</strong> and will be skipped. </>
-                    )}
-                    {duplicateCheck.repeated > 0 && (
-                      <><strong>{duplicateCheck.repeated.toLocaleString()} of {duplicateCheck.total.toLocaleString()} records are repeated inside this workbook</strong> and will be added once rather than twice. </>
-                    )}
-                    Continue to append the {duplicateCheck.fresh.toLocaleString()} remaining record{duplicateCheck.fresh === 1 ? "" : "s"}.
-                  </span>
-                )
+                ? <span><strong>{duplicateCheck.stored.toLocaleString()} of {duplicateCheck.total.toLocaleString()} records are already in the database</strong> and will be skipped. Continue to append the {duplicateCheck.fresh.toLocaleString()} new record{duplicateCheck.fresh === 1 ? "" : "s"}.</span>
                 : <span>Records already in the database are detected and skipped, so repeating an upload will not create duplicates.</span>}
             </div>
             <div className="dialog-actions">

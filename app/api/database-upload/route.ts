@@ -54,7 +54,6 @@ export async function POST(request: Request) {
     const hasUndatedRecord = effectiveDates.length !== datedValues.length;
     let inserted = 0;
     let storedCount = 0;
-    let repeated = 0;
     let fresh = 0;
 
     try {
@@ -72,7 +71,6 @@ export async function POST(request: Request) {
 
         const partition = partitionNewRecords(records, stored.map((row) => recordKey(row)));
         storedCount = partition.stored;
-        repeated = partition.repeated;
         fresh = partition.fresh.length;
         if (checkOnly) return;
 
@@ -91,8 +89,8 @@ export async function POST(request: Request) {
 
     const total = records.length;
     return Response.json(checkOnly
-      ? { total, stored: storedCount, repeated, fresh }
-      : { total, stored: storedCount, repeated, inserted });
+      ? { total, stored: storedCount, fresh }
+      : { total, stored: storedCount, inserted });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Database upload failed.";
     console.error("Rate database upload failed:", message);
