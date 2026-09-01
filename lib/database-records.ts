@@ -30,36 +30,29 @@ export function recordKey(record: RecordIdentity): string {
 }
 
 /**
- * Splits records into those worth inserting and counts of those that are not, keeping the two
- * reasons apart: `stored` is already in the database, while `repeated` is a row the payload
- * itself lists more than once. Both are skipped, but they mean different things to the user,
- * so they are never summed into a single "duplicate" figure.
+ * Splits records into those not yet in the database and a count of those already there.
+ *
+ * The comparison is strictly payload against stored rows. Rows the workbook lists more than
+ * once are all kept: a repeated identity routinely carries a different rate — the same lane
+ * quoted twice at two prices — so collapsing them would silently drop real quotes.
  */
 export function partitionNewRecords(
   records: DatabaseRateRecord[],
   existingKeys: Iterable<string>,
-): { fresh: DatabaseRateRecord[]; stored: number; repeated: number } {
+): { fresh: DatabaseRateRecord[]; stored: number } {
   const storedKeys = new Set(existingKeys);
-  const seen = new Set<string>();
   const fresh: DatabaseRateRecord[] = [];
   let stored = 0;
-  let repeated = 0;
 
   for (const record of records) {
-    const key = recordKey(record);
-    if (storedKeys.has(key)) {
+    if (storedKeys.has(recordKey(record))) {
       stored += 1;
       continue;
     }
-    if (seen.has(key)) {
-      repeated += 1;
-      continue;
-    }
-    seen.add(key);
     fresh.push(record);
   }
 
-  return { fresh, stored, repeated };
+  return { fresh, stored };
 }
 
 function nullableText(value: unknown): string | null {

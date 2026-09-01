@@ -57,7 +57,7 @@ describe("duplicate upload detection", () => {
 
   it("keeps every record when the table is empty", () => {
     const records = [row(), row({ 8: "40FT" })];
-    expect(partitionNewRecords(records, [])).toEqual({ fresh: records, stored: 0, repeated: 0 });
+    expect(partitionNewRecords(records, [])).toEqual({ fresh: records, stored: 0 });
   });
 
   it("skips records already stored and inserts the rest", () => {
@@ -66,7 +66,6 @@ describe("duplicate upload detection", () => {
     const partition = partitionNewRecords([stored, fresh], [recordKey(stored)]);
     expect(partition.fresh).toEqual([fresh]);
     expect(partition.stored).toBe(1);
-    expect(partition.repeated).toBe(0);
   });
 
   it("skips the whole payload when the same upload is repeated", () => {
@@ -74,26 +73,30 @@ describe("duplicate upload detection", () => {
     const partition = partitionNewRecords(records, records.map(recordKey));
     expect(partition.fresh).toEqual([]);
     expect(partition.stored).toBe(3);
-    expect(partition.repeated).toBe(0);
   });
 
-  it("counts rows repeated inside the payload separately from stored rows", () => {
-    // Nothing is in the database; the workbook simply lists the same quote twice.
-    const partition = partitionNewRecords([row(), row(), row({ 8: "40FT" })], []);
-    expect(partition.fresh).toHaveLength(2);
+  it("keeps rows the workbook lists twice, because their rates can differ", () => {
+    // The same lane quoted at two prices must not collapse into one record.
+    const cheaper = row({ 10: "10411" });
+    const dearer = row({ 10: "10501" });
+    expect(recordKey(cheaper)).toBe(recordKey(dearer));
+
+    const partition = partitionNewRecords([cheaper, dearer], []);
+    expect(partition.fresh).toEqual([cheaper, dearer]);
     expect(partition.stored).toBe(0);
-    expect(partition.repeated).toBe(1);
   });
 
-  it("reports both reasons independently when each applies", () => {
+  it("compares only against the database, never the payload against itself", () => {
+    const partition = partitionNewRecords([row(), row(), row({ 8: "40FT" })], []);
+    expect(partition.fresh).toHaveLength(3);
+    expect(partition.stored).toBe(0);
+  });
+
+  it("skips every copy of a row that is already stored", () => {
     const stored = row();
-    const partition = partitionNewRecords(
-      [stored, row({ 8: "40FT" }), row({ 8: "40FT" }), row({ 8: "40HC" })],
-      [recordKey(stored)],
-    );
-    expect(partition.fresh).toHaveLength(2);
-    expect(partition.stored).toBe(1);
-    expect(partition.repeated).toBe(1);
+    const partition = partitionNewRecords([stored, stored, row({ 8: "40FT" })], [recordKey(stored)]);
+    expect(partition.fresh).toHaveLength(1);
+    expect(partition.stored).toBe(2);
   });
 
   it("does not mutate the caller's set of stored keys", () => {
