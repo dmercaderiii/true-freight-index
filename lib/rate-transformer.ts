@@ -87,9 +87,14 @@ function normalizeRate(value: unknown): string | null {
   return Number.isFinite(numeric) ? String(numeric) : null;
 }
 
+/**
+ * Converts an Excel serial to the calendar date the workbook displays. The integer part is
+ * that date, so any time component is dropped rather than allowed to shift the day, and the
+ * arithmetic runs entirely in UTC — the result never depends on the reader's timezone.
+ */
 function excelSerialToDate(value: number): string | null {
-  if (!Number.isFinite(value) || value <= 0) return null;
-  const date = new Date(Math.round((value - 25569) * 86_400_000));
+  if (!Number.isFinite(value) || value < 1) return null;
+  const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 86_400_000);
   if (Number.isNaN(date.getTime())) return null;
   return `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}`;
 }
@@ -97,7 +102,14 @@ function excelSerialToDate(value: number): string | null {
 export function formatEffectiveDate(value: unknown): string {
   if (value === null || value === undefined || value === "") return "";
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return `${value.getMonth() + 1}/${value.getDate()}/${value.getFullYear()}`;
+    // The worker reads serials rather than Dates, so this only catches a Date from elsewhere.
+    // Such a value encodes a calendar day as midnight in one basis or the other: read it in
+    // whichever basis lands on midnight, so the day is never truncated into its neighbour.
+    const isUtcMidnight = value.getUTCHours() === 0
+      && value.getUTCMinutes() === 0 && value.getUTCSeconds() === 0;
+    return isUtcMidnight
+      ? `${value.getUTCMonth() + 1}/${value.getUTCDate()}/${value.getUTCFullYear()}`
+      : `${value.getMonth() + 1}/${value.getDate()}/${value.getFullYear()}`;
   }
   if (typeof value === "number") return excelSerialToDate(value) ?? String(value);
   const valueText = String(value).trim();
