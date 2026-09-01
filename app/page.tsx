@@ -374,8 +374,8 @@ export default function Home() {
             <h2 id="database-confirm-title">Append records to PostgreSQL?</h2>
             <p>
               {duplicateCheck
-                ? <>This will add the <strong>{duplicateCheck.fresh.toLocaleString()} new record{duplicateCheck.fresh === 1 ? "" : "s"}</strong> to <code>public.rate_analysis_test_environment</code>. Existing records will not be changed.</>
-                : <>This will add up to <strong>{result.rows.length.toLocaleString()} records</strong> to <code>public.rate_analysis_test_environment</code>. Existing records will not be changed.</>}
+                ? <>This will add the <strong>{duplicateCheck.fresh.toLocaleString()} new record{duplicateCheck.fresh === 1 ? "" : "s"}</strong> to <code>public.cea_to_nae_naw_rate_analysis_report</code>. Existing records will not be changed.</>
+                : <>This will add up to <strong>{result.rows.length.toLocaleString()} records</strong> to <code>public.cea_to_nae_naw_rate_analysis_report</code>. Existing records will not be changed.</>}
             </p>
             <label className="dialog-field">
               <span>Database upload passcode</span>

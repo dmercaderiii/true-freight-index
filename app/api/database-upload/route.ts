@@ -64,7 +64,7 @@ export async function POST(request: Request) {
         const stored = await transaction<RecordIdentity[]>`
           select agent, carrier, to_char(effective_date, 'YYYY-MM-DD') as effective_date,
             commodity, origin, origin_via, destination, destination_via, container_size, trade
-          from public.rate_analysis_test_environment
+          from public.cea_to_nae_naw_rate_analysis_report
           where effective_date = any(${datedValues}::date[])
             or (${hasUndatedRecord} and effective_date is null)
         `;
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         for (let index = 0; index < partition.fresh.length; index += INSERT_BATCH_SIZE) {
           const batch = partition.fresh.slice(index, index + INSERT_BATCH_SIZE);
           await transaction`
-            insert into public.rate_analysis_test_environment
+            insert into public.cea_to_nae_naw_rate_analysis_report
             ${transaction(batch, ...DATABASE_COLUMNS)}
           `;
         }
