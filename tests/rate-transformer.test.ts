@@ -80,6 +80,58 @@ describe("rate transformer", () => {
   });
 });
 
+describe("effective date reading", () => {
+  // The worker reads raw Excel serials, so these are the values Eff Date actually arrives as.
+  it.each([
+    [46266, "9/1/2026"],
+    [46265, "8/31/2026"],
+    [45658, "1/1/2025"],
+    [44197, "1/1/2021"],
+    [25569, "1/1/1970"],
+  ])("reads serial %i as %s", (serial, expected) => {
+    expect(formatEffectiveDate(serial)).toBe(expected);
+  });
+
+  it("takes the day the workbook shows when a serial carries a time component", () => {
+    // 46266.5 is midday on 9/1/2026; the time must not roll the day forward or back.
+    expect(formatEffectiveDate(46266.5)).toBe("9/1/2026");
+    expect(formatEffectiveDate(46266.999)).toBe("9/1/2026");
+    expect(formatEffectiveDate(46266.001)).toBe("9/1/2026");
+  });
+
+  it("does not depend on the machine's timezone", () => {
+    // Pure arithmetic: the same serial must format identically whatever the host offset is.
+    const offsets = [-720, -480, 0, 330, 480, 780];
+    const original = Date.prototype.getTimezoneOffset;
+    try {
+      for (const offset of offsets) {
+        Date.prototype.getTimezoneOffset = () => offset;
+        expect(formatEffectiveDate(46266)).toBe("9/1/2026");
+      }
+    } finally {
+      Date.prototype.getTimezoneOffset = original;
+    }
+  });
+
+  it("recovers the intended day from a Date at either midnight basis", () => {
+    // Local midnight, as SheetJS builds them.
+    expect(formatEffectiveDate(new Date(2026, 8, 1))).toBe("9/1/2026");
+    // UTC midnight, which naive local reads would truncate to the previous day west of UTC.
+    expect(formatEffectiveDate(new Date(Date.UTC(2026, 8, 1)))).toBe("9/1/2026");
+  });
+
+  it("still reads dates written as text", () => {
+    expect(formatEffectiveDate("9/1/2026")).toBe("9/1/2026");
+    expect(formatEffectiveDate("9-1-2026")).toBe("9/1/2026");
+    expect(formatEffectiveDate("09/01/26")).toBe("9/1/2026");
+  });
+
+  it("rejects a serial that is not a real date", () => {
+    expect(formatEffectiveDate(0)).toBe("0");
+    expect(formatEffectiveDate(-5)).toBe("-5");
+  });
+});
+
 describe("source row validation", () => {
   function reject(overrides: Partial<SourceRateRow>) {
     const result = transformRateRows([{ ...base, ...overrides }]);
